@@ -455,6 +455,7 @@ const DEFAULT_STATE = {
   // 闖關系統
   questProgress:{},        // { '2026-05-09': { listened:['あ',...], wroteEnough:['あ',...], quizPassed:false, quizBest:0 } }
   badges:[],               // ['hira-half', 'hira-full', 'kata-full', 'all-kana', 'graduate']
+  completionDates:{},      // { dayNumber: 'YYYY-MM-DD' }
 };
 let S = loadState();
 
@@ -469,6 +470,7 @@ function loadState(){
     if(!merged.kanaProgress) merged.kanaProgress = {hira:[], kata:[]};
     if(!merged.questProgress) merged.questProgress = {};
     if(!merged.badges) merged.badges = [];
+    if(!merged.completionDates) merged.completionDates = {};
     return merged;
   }catch(e){ return JSON.parse(JSON.stringify(DEFAULT_STATE)); }
 }
@@ -1092,6 +1094,7 @@ function completeDay(){
   }
   S.completedDays.push(dn);
   S.lastCompleteDate = todayISO();
+  S.completionDates[dn] = todayISO();
   // 更新假名進度
   const lesson = ALL_LESSONS[dn-1];
   if(lesson.kind === 'hira' || lesson.kind === 'kata'){
@@ -1445,6 +1448,30 @@ function renderMomView(){
   // === 詳情 ===
   if(momSelectedDay){
     renderMomDayDetail(momSelectedDay);
+  }
+
+  // === 完成紀錄 ===
+  const logWrap = document.getElementById('completionLogWrap');
+  if(logWrap){
+    const entries = Object.keys(S.completionDates)
+      .map(k => parseInt(k))
+      .sort((a,b) => b - a); // 最新在上
+    if(entries.length === 0){
+      logWrap.innerHTML = '<p style="color:var(--ink-3);font-size:13px;text-align:center;padding:10px 0">還沒有完成紀錄</p>';
+    } else {
+      const rows = entries.map(d => {
+        const lesson = ALL_LESSONS[d-1];
+        const iso = S.completionDates[d];
+        const dateObj = new Date(iso + 'T00:00:00');
+        const dateStr = dateObj.toLocaleDateString('zh-TW', {month:'numeric', day:'numeric', weekday:'short'});
+        return `<div class="log-row">
+          <span class="log-day">Day ${d}</span>
+          <span class="log-topic">${lesson.topicJp}</span>
+          <span class="log-date">${dateStr}</span>
+        </div>`;
+      }).join('');
+      logWrap.innerHTML = rows;
+    }
   }
 }
 
