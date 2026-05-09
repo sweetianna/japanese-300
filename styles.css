@@ -397,6 +397,8 @@ header{padding:28px 0 16px;display:flex;justify-content:space-between;align-item
 .canvas-wrap svg{
   position:absolute;inset:0;width:100%;height:100%;
   display:block;
+  pointer-events:none;
+  touch-action:none;
 }
 .guide-ch{
   fill:rgba(255,255,255,.06);font-family:var(--jp-display);font-weight:700;
@@ -412,6 +414,10 @@ header{padding:28px 0 16px;display:flex;justify-content:space-between;align-item
 .stroke-target.active{fill:var(--accent-2);stroke:var(--accent-2);animation:pulseTarget 1s infinite}
 .stroke-target.done{fill:var(--good);stroke:var(--good);opacity:.7}
 @keyframes pulseTarget{0%,100%{r:5}50%{r:7}}
+.stroke-end{
+  fill:rgba(255,140,66,.25);stroke:rgba(255,140,66,.7);
+  stroke-width:1;pointer-events:none;
+}
 .stroke-num{
   fill:#000;font-family:var(--mono);font-weight:700;font-size:5px;
   text-anchor:middle;dominant-baseline:central;pointer-events:none;

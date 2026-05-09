@@ -123,23 +123,44 @@ const Audio = {
 // ============================================================
 const Write = {
   current:null, currentRo:'',
-  paths:[],          // 真實 SVG path strings (KanjiVG)
-  targets:[],        // 從 paths 解析的起點 [{x,y}]
+  paths:[],
+  targets:[],        // 各筆畫起點 [{x,y,done}]
+  strokeEnds:[],     // 各筆畫終點 [{x,y}]（從 KanjiVG path 計算）
   nextIdx:0,
   drawing:false, drawnPath:[], allPaths:[],
   state:'idle',     // 'demo' | 'idle' | 'drawing' | 'complete'
-  demoTimers:[],    // 用來取消正在播放的示範
-  hitRadius:8,      // 109 viewBox 下的 hit 範圍
+  demoTimers:[],
+  hitRadius:12,     // 起點命中半徑（109 viewBox）
+  endHitRadius:14,  // 終點命中半徑（稍寬鬆）
 
   open(ch, ro){
     if(!STROKE_PATHS[ch]){ alert('這個字還沒有筆順資料'); return; }
     this.current = ch;
     this.currentRo = ro || '';
     this.paths = STROKE_PATHS[ch];
+
+    // 起點：從 path d 解析第一個 M 座標
     this.targets = this.paths.map((d,i)=>{
       const m = d.match(/^M\s*([0-9.\-]+)[,\s]+([0-9.\-]+)/);
       return m ? {x:parseFloat(m[1]), y:parseFloat(m[2]), idx:i, done:false} : {x:50, y:50, idx:i, done:false};
     });
+
+    // 終點：用暫時 SVG 取 getPointAtLength(totalLength)
+    const tmpSvg = document.createElementNS('http://www.w3.org/2000/svg','svg');
+    tmpSvg.setAttribute('viewBox','0 0 109 109');
+    tmpSvg.style.cssText = 'position:absolute;visibility:hidden;width:109px;height:109px;top:-9999px;left:-9999px;';
+    document.body.appendChild(tmpSvg);
+    this.strokeEnds = this.paths.map(d=>{
+      const p = document.createElementNS('http://www.w3.org/2000/svg','path');
+      p.setAttribute('d', d);
+      tmpSvg.appendChild(p);
+      const len = p.getTotalLength();
+      const pt  = p.getPointAtLength(len);
+      tmpSvg.removeChild(p);
+      return {x: pt.x, y: pt.y};
+    });
+    document.body.removeChild(tmpSvg);
+
     this.nextIdx = 0;
     this.drawing = false;
     this.drawnPath = []; this.allPaths = [];
@@ -256,13 +277,17 @@ const Write = {
       const d = 'M '+this.drawnPath.map(p=>`${p.x} ${p.y}`).join(' L ');
       html += `<path class="draw-line" d="${d}"/>`;
     }
-    // 起點圓圈
+    // 起點圓圈 + 終點指示
     this.targets.forEach((t,i)=>{
-      let cls = 'stroke-target';
-      if(t.done) cls += ' done';
-      else if(i === this.nextIdx) cls += ' active';
+      if(t.done) return;
+      let cls = 'stroke-target' + (i === this.nextIdx ? ' active' : '');
       html += `<circle class="${cls}" cx="${t.x}" cy="${t.y}" r="5"/>`;
       html += `<text class="stroke-num" x="${t.x}" y="${t.y+0.3}">${i+1}</text>`;
+      // 終點小標記（只顯示當前筆畫）
+      if(i === this.nextIdx && this.strokeEnds[i]){
+        const e = this.strokeEnds[i];
+        html += `<circle class="stroke-end" cx="${e.x}" cy="${e.y}" r="4"/>`;
+      }
     });
     svg.innerHTML = html;
   },
@@ -282,12 +307,18 @@ const Write = {
 
   start(e){
     if(!this.current || this.state === 'demo') return;
+    if(this.nextIdx >= this.targets.length) return;
     e.preventDefault();
+    const p = this.getPoint(e);
+    const t = this.targets[this.nextIdx];
+    // 必須從該筆畫的起點按下
+    if(Math.hypot(p.x - t.x, p.y - t.y) > this.hitRadius){
+      this._showMsg(`請從 ❶ 起點按下開始畫`, 'bad', 1000);
+      return;
+    }
     this.drawing = true;
     this.state = 'drawing';
-    const p = this.getPoint(e);
     this.drawnPath = [p];
-    this.checkPoint(p);
     this.render();
   },
 
@@ -296,9 +327,8 @@ const Write = {
     e.preventDefault();
     const p = this.getPoint(e);
     const last = this.drawnPath[this.drawnPath.length-1];
-    if(!last || Math.hypot(p.x-last.x, p.y-last.y) > 1.5){
+    if(!last || Math.hypot(p.x-last.x, p.y-last.y) > 0.8){
       this.drawnPath.push(p);
-      this.checkPoint(p);
       this.render();
     }
   },
@@ -307,26 +337,44 @@ const Write = {
     if(!this.drawing) return;
     if(e) e.preventDefault();
     this.drawing = false;
-    if(this.drawnPath.length >= 2) this.allPaths.push(this.drawnPath);
-    this.drawnPath = [];
+    const endPt = this.drawnPath[this.drawnPath.length - 1];
+    if(!endPt || this.drawnPath.length < 2){
+      this.drawnPath = [];
+      this.render();
+      return;
+    }
+    // 必須在該筆畫的終點附近放開
+    const se = this.strokeEnds[this.nextIdx];
+    if(se && Math.hypot(endPt.x - se.x, endPt.y - se.y) <= this.endHitRadius){
+      this.targets[this.nextIdx].done = true;
+      this.allPaths.push(this.drawnPath);
+      this.drawnPath = [];
+      this.nextIdx++;
+      if(this.nextIdx >= this.targets.length){
+        this.complete();
+      } else {
+        this._showMsg(`✓ 第 ${this.nextIdx} 筆完成，繼續`, 'good', 0);
+        this.state = 'idle';
+      }
+    } else {
+      this._showMsg('× 沒到終點，太早放開了', 'bad', 1000);
+      this.drawnPath = [];
+      this.state = 'idle';
+    }
     this.render();
   },
 
-  checkPoint(p){
-    if(this.nextIdx >= this.targets.length) return;
-    // 檢查跳過後面的點
-    for(let i=this.nextIdx+1; i<this.targets.length; i++){
-      const ft = this.targets[i];
-      if(Math.hypot(p.x-ft.x, p.y-ft.y) < this.hitRadius){
-        this.wrongOrder();
-        return;
-      }
-    }
-    const t = this.targets[this.nextIdx];
-    if(Math.hypot(p.x-t.x, p.y-t.y) < this.hitRadius){
-      t.done = true;
-      this.nextIdx++;
-      if(this.nextIdx >= this.targets.length) this.complete();
+  _showMsg(text, cls, resetDelay){
+    const el = document.getElementById('writeMsg');
+    el.textContent = text;
+    el.className = 'write-msg' + (cls ? ' ' + cls : '');
+    if(resetDelay > 0){
+      setTimeout(()=>{
+        if(this.state !== 'complete'){
+          el.textContent = '換你寫，照 ①②③ 順序';
+          el.className = 'write-msg';
+        }
+      }, resetDelay);
     }
   },
 
@@ -355,14 +403,6 @@ const Write = {
         document.getElementById('writeMsg').className = 'write-msg good';
       }, 800);
     }
-  },
-
-  wrongOrder(){
-    document.getElementById('writeMsg').textContent = '× 筆順錯了，自動清掉';
-    document.getElementById('writeMsg').className = 'write-msg bad';
-    document.getElementById('wOk').textContent = '×';
-    document.getElementById('wOk').style.color = 'var(--accent)';
-    setTimeout(()=>this.clear(), 700);
   },
 
   clear(){
