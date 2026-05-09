@@ -144,22 +144,8 @@ const Write = {
       const m = d.match(/^M\s*([0-9.\-]+)[,\s]+([0-9.\-]+)/);
       return m ? {x:parseFloat(m[1]), y:parseFloat(m[2]), idx:i, done:false} : {x:50, y:50, idx:i, done:false};
     });
-
-    // 終點：用暫時 SVG 取 getPointAtLength(totalLength)
-    const tmpSvg = document.createElementNS('http://www.w3.org/2000/svg','svg');
-    tmpSvg.setAttribute('viewBox','0 0 109 109');
-    tmpSvg.style.cssText = 'position:absolute;visibility:hidden;width:109px;height:109px;top:-9999px;left:-9999px;';
-    document.body.appendChild(tmpSvg);
-    this.strokeEnds = this.paths.map(d=>{
-      const p = document.createElementNS('http://www.w3.org/2000/svg','path');
-      p.setAttribute('d', d);
-      tmpSvg.appendChild(p);
-      const len = p.getTotalLength();
-      const pt  = p.getPointAtLength(len);
-      tmpSvg.removeChild(p);
-      return {x: pt.x, y: pt.y};
-    });
-    document.body.removeChild(tmpSvg);
+    // 終點在 playDemo() 的 rAF 裡計算（等 modal 可見後，getTotalLength 才準確）
+    this.strokeEnds = [];
 
     this.nextIdx = 0;
     this.drawing = false;
@@ -212,14 +198,16 @@ const Write = {
     });
     svg.innerHTML = html;
 
-    // 必須等 SVG 渲染後才能 getTotalLength()
+    // 必須等 SVG 渲染後才能 getTotalLength()（modal 此時已 visible）
     requestAnimationFrame(()=>{
-      // 預先計算每筆畫的長度 + 持續時間
+      // 同步計算每筆畫長度、終點座標、動畫時間
       const strokeInfo = this.paths.map((d, i)=>{
         const el = document.getElementById(`demo-${i}`);
         if(!el) return null;
         const len = el.getTotalLength();
-        const duration = Math.max(600, len * 30); // 每單位 30ms，最少 600ms
+        const duration = Math.max(600, len * 30);
+        // 趁這裡算終點，modal 已可見，iOS Safari 也能正確回傳
+        if(len > 0) this.strokeEnds[i] = el.getPointAtLength(len);
         return {el, len, duration};
       });
 
@@ -343,9 +331,20 @@ const Write = {
       this.render();
       return;
     }
-    // 必須在該筆畫的終點附近放開
+    // 必須在該筆畫的終點附近放開（strokeEnds 可能還沒計算完則寬鬆放行）
     const se = this.strokeEnds[this.nextIdx];
-    if(se && Math.hypot(endPt.x - se.x, endPt.y - se.y) <= this.endHitRadius){
+    if(!se){
+      // 終點資料尚未就緒，保守放行（讓使用者繼續），重播示範後會修正
+      this.targets[this.nextIdx].done = true;
+      this.allPaths.push(this.drawnPath);
+      this.drawnPath = [];
+      this.nextIdx++;
+      if(this.nextIdx >= this.targets.length){ this.complete(); }
+      else { this._showMsg(`✓ 第 ${this.nextIdx} 筆完成，繼續`, 'good', 0); this.state = 'idle'; }
+      this.render();
+      return;
+    }
+    if(Math.hypot(endPt.x - se.x, endPt.y - se.y) <= this.endHitRadius){
       this.targets[this.nextIdx].done = true;
       this.allPaths.push(this.drawnPath);
       this.drawnPath = [];
