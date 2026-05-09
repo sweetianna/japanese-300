@@ -124,14 +124,15 @@ const Audio = {
 const Write = {
   current:null, currentRo:'',
   paths:[],
-  targets:[],        // 各筆畫起點 [{x,y,done}]
-  strokeEnds:[],     // 各筆畫終點 [{x,y}]（從 KanjiVG path 計算）
+  targets:[],         // 各筆畫起點 [{x,y,done}]
+  strokeSamples:[],   // 各筆畫沿路採樣點 [[{x,y},...],...]，用於 coverage 判定
   nextIdx:0,
   drawing:false, drawnPath:[], allPaths:[],
   state:'idle',     // 'demo' | 'idle' | 'drawing' | 'complete'
   demoTimers:[],
-  hitRadius:12,     // 起點命中半徑（109 viewBox）
-  endHitRadius:14,  // 終點命中半徑（稍寬鬆）
+  hitRadius:14,       // 起點命中半徑（109 viewBox）
+  coverRadius:15,     // coverage 判定容差半徑
+  coverThreshold:0.65,// 至少要覆蓋 65% 的參考採樣點
 
   open(ch, ro){
     if(!STROKE_PATHS[ch]){ alert('這個字還沒有筆順資料'); return; }
@@ -144,8 +145,8 @@ const Write = {
       const m = d.match(/^M\s*([0-9.\-]+)[,\s]+([0-9.\-]+)/);
       return m ? {x:parseFloat(m[1]), y:parseFloat(m[2]), idx:i, done:false} : {x:50, y:50, idx:i, done:false};
     });
-    // 終點在 playDemo() 的 rAF 裡計算（等 modal 可見後，getTotalLength 才準確）
-    this.strokeEnds = [];
+    // 採樣點在 playDemo() 的 rAF 裡計算（等 modal 可見後，getTotalLength 才準確）
+    this.strokeSamples = [];
 
     this.nextIdx = 0;
     this.drawing = false;
@@ -200,14 +201,19 @@ const Write = {
 
     // 必須等 SVG 渲染後才能 getTotalLength()（modal 此時已 visible）
     requestAnimationFrame(()=>{
-      // 同步計算每筆畫長度、終點座標、動畫時間
+      // 同步計算每筆畫長度、沿路採樣點、動畫時間
+      // modal 此時已 visible，iOS Safari 的 getTotalLength 才準確
       const strokeInfo = this.paths.map((d, i)=>{
         const el = document.getElementById(`demo-${i}`);
         if(!el) return null;
         const len = el.getTotalLength();
         const duration = Math.max(600, len * 30);
-        // 趁這裡算終點，modal 已可見，iOS Safari 也能正確回傳
-        if(len > 0) this.strokeEnds[i] = el.getPointAtLength(len);
+        if(len > 0){
+          const n = Math.max(10, Math.ceil(len / 5)); // 每 5 單位一個採樣點
+          const pts = [];
+          for(let j=0; j<=n; j++) pts.push(el.getPointAtLength(len*j/n));
+          this.strokeSamples[i] = pts;
+        }
         return {el, len, duration};
       });
 
@@ -265,17 +271,12 @@ const Write = {
       const d = 'M '+this.drawnPath.map(p=>`${p.x} ${p.y}`).join(' L ');
       html += `<path class="draw-line" d="${d}"/>`;
     }
-    // 起點圓圈 + 終點指示
+    // 起點圓圈
     this.targets.forEach((t,i)=>{
       if(t.done) return;
-      let cls = 'stroke-target' + (i === this.nextIdx ? ' active' : '');
+      const cls = 'stroke-target' + (i === this.nextIdx ? ' active' : '');
       html += `<circle class="${cls}" cx="${t.x}" cy="${t.y}" r="5"/>`;
       html += `<text class="stroke-num" x="${t.x}" y="${t.y+0.3}">${i+1}</text>`;
-      // 終點小標記（只顯示當前筆畫）
-      if(i === this.nextIdx && this.strokeEnds[i]){
-        const e = this.strokeEnds[i];
-        html += `<circle class="stroke-end" cx="${e.x}" cy="${e.y}" r="4"/>`;
-      }
     });
     svg.innerHTML = html;
   },
@@ -325,42 +326,47 @@ const Write = {
     if(!this.drawing) return;
     if(e) e.preventDefault();
     this.drawing = false;
-    const endPt = this.drawnPath[this.drawnPath.length - 1];
-    if(!endPt || this.drawnPath.length < 2){
+    if(this.drawnPath.length < 3){
       this.drawnPath = [];
       this.render();
       return;
     }
-    // 必須在該筆畫的終點附近放開（strokeEnds 可能還沒計算完則寬鬆放行）
-    const se = this.strokeEnds[this.nextIdx];
-    if(!se){
-      // 終點資料尚未就緒，保守放行（讓使用者繼續），重播示範後會修正
-      this.targets[this.nextIdx].done = true;
-      this.allPaths.push(this.drawnPath);
-      this.drawnPath = [];
-      this.nextIdx++;
-      if(this.nextIdx >= this.targets.length){ this.complete(); }
-      else { this._showMsg(`✓ 第 ${this.nextIdx} 筆完成，繼續`, 'good', 0); this.state = 'idle'; }
-      this.render();
+    const samples = this.strokeSamples[this.nextIdx];
+    if(!samples || samples.length === 0){
+      // 採樣資料還沒好（使用者示範還沒播完就開始畫），不判定直接放行
+      this._advanceStroke();
       return;
     }
-    if(Math.hypot(endPt.x - se.x, endPt.y - se.y) <= this.endHitRadius){
-      this.targets[this.nextIdx].done = true;
-      this.allPaths.push(this.drawnPath);
-      this.drawnPath = [];
-      this.nextIdx++;
-      if(this.nextIdx >= this.targets.length){
-        this.complete();
-      } else {
-        this._showMsg(`✓ 第 ${this.nextIdx} 筆完成，繼續`, 'good', 0);
-        this.state = 'idle';
+    // Coverage 判定：筆跡必須覆蓋到足夠比例的參考點
+    let hit = 0;
+    for(const sp of samples){
+      for(const dp of this.drawnPath){
+        if(Math.hypot(dp.x - sp.x, dp.y - sp.y) <= this.coverRadius){ hit++; break; }
       }
+    }
+    const coverage = hit / samples.length;
+    if(coverage >= this.coverThreshold){
+      this._advanceStroke();
     } else {
-      this._showMsg('× 沒到終點，太早放開了', 'bad', 1000);
+      this._showMsg('× 要沿著灰色筆畫描到底，再試一次', 'bad', 1200);
       this.drawnPath = [];
       this.state = 'idle';
+      this.render();
     }
-    this.render();
+  },
+
+  _advanceStroke(){
+    this.targets[this.nextIdx].done = true;
+    this.allPaths.push(this.drawnPath);
+    this.drawnPath = [];
+    this.nextIdx++;
+    if(this.nextIdx >= this.targets.length){
+      this.complete();
+    } else {
+      this._showMsg(`✓ 第 ${this.nextIdx} 筆完成，繼續`, 'good', 0);
+      this.state = 'idle';
+      this.render();
+    }
   },
 
   _showMsg(text, cls, resetDelay){
