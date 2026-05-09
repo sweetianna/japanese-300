@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#0a0a0f">
+<title>300 日 · 日本語</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700;900&family=Shippori+Mincho:wght@500;700;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<button class="mom-toggle" onclick="switchView('mom')">媽</button>
+
+<div class="app">
+
+<header>
+  <div class="logo">
+    <span class="num" id="logoDay">001</span>
+    <span class="jp">日本語三百日</span>
+  </div>
+  <div class="streak">
+    <div class="flame">🔥</div>
+    <div class="n" id="streakNum">0</div>
+    <div class="lbl">streak</div>
+  </div>
+</header>
+
+<div class="miss" id="missBanner"></div>
+<div class="audio-warn" id="audioWarn"></div>
+<div class="res-hint" id="resHint">
+  <button class="dismiss" onclick="dismissResHint()">×</button>
+  <div id="resHintContent"></div>
+</div>
+
+<!-- ============ TODAY VIEW ============ -->
+<div class="view active" id="view-today">
+
+<div class="hero">
+  <div class="day-row">
+    <div class="day-num" id="dayNum">1</div>
+    <div class="day-of">/ 300</div>
+  </div>
+  <div class="topic-jp" id="topicJp">あ行</div>
+  <div class="topic-en" id="topicEn">First five vowels</div>
+  <div class="progress"><div class="progress-bar" id="progBar" style="width:0%"></div></div>
+  <div class="progress-meta">
+    <span id="progPct">0%</span>
+    <span id="progDays">0 / 300 日</span>
+  </div>
+  <div class="done-stamp" id="doneStamp">✓ 今天已經完成了，明天見</div>
+</div>
+
+<!-- ============ QUEST CARDS ============ -->
+<div class="quests" id="questsBox">
+  <div class="quest" id="quest-1">
+    <div class="quest-num">1</div>
+    <div class="quest-info">
+      <div class="quest-title">聽 + 認</div>
+      <div class="quest-desc">點每個假名聽發音</div>
+    </div>
+    <div class="quest-stat" id="q1-stat">0 / 0</div>
+  </div>
+  <div class="quest" id="quest-2">
+    <div class="quest-num">2</div>
+    <div class="quest-info">
+      <div class="quest-title">寫</div>
+      <div class="quest-desc">每個字描 5 次</div>
+    </div>
+    <div class="quest-stat" id="q2-stat">0 / 0</div>
+  </div>
+  <div class="quest" id="quest-3">
+    <div class="quest-num">3</div>
+    <div class="quest-info">
+      <div class="quest-title">小考：聽音選字</div>
+      <div class="quest-desc">答對 8 成才算過</div>
+    </div>
+    <div class="quest-stat" id="q3-stat">待挑戰</div>
+    <button class="quest-go" onclick="startListenQuiz()">挑戰</button>
+  </div>
+</div>
+
+<div class="section" id="lessonSection">
+  <div class="section-h"><h2>今日のレッスン</h2><span class="count" id="lessonLabel">Lesson</span></div>
+  <div id="lessonContent"></div>
+</div>
+
+<button class="complete-btn" id="completeBtn" onclick="completeDay()" disabled>三關全過才能打卡</button>
+
+</div>
+
+<!-- ============ PROGRESS VIEW ============ -->
+<div class="view" id="view-progress">
+  <header style="padding-top:8px"><div class="logo"><span class="jp">記録</span></div></header>
+
+  <div class="stat-grid">
+    <div class="stat"><div class="v" id="s-streak">0</div><div class="l">連續天數</div></div>
+    <div class="stat"><div class="v" id="s-total">0</div><div class="l">累計完成</div></div>
+    <div class="stat"><div class="v" id="s-kana">0</div><div class="l">學會假名</div></div>
+    <div class="stat"><div class="v" id="s-pct">0%</div><div class="l">總進度</div></div>
+  </div>
+
+  <div class="section">
+    <div class="section-h"><h2>勳章</h2><span class="count" id="badgeCount">0 / 6</span></div>
+    <div class="badge-grid" id="badgeGrid"></div>
+  </div>
+
+  <div class="section">
+    <div class="section-h"><h2>カレンダー</h2><span class="count">前 30 日</span></div>
+    <div class="cal" id="calGrid"></div>
+  </div>
+
+  <div class="section">
+    <div class="section-h"><h2>五十音表</h2><span class="count" id="kanaProgLbl">0 / 71</span></div>
+    <div class="lesson-card">
+      <div class="kana-grid" id="kanaProgGrid"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ ABOUT VIEW ============ -->
+<div class="view" id="view-about">
+  <header style="padding-top:8px"><div class="logo"><span class="jp">説明</span></div></header>
+
+  <div class="about-card">
+    <h3>這是什麼</h3>
+    這是一個 <b>300 天從零到 N4</b> 的日文學習計畫。
+    <br><br>
+    每天打開，做完當天的內容，按「完成今日進度」。
+    <br><br>
+    連續打卡會累積。<b>斷一天就會跳提醒</b>。
+  </div>
+
+  <div class="about-card">
+    <h3>學習路線</h3>
+    <b>Day 1–30</b>：五十音（平假名 + 片假名）<br>
+    <b>Day 31–90</b>：基礎單字 + 基本句型<br>
+    <b>Day 91–180</b>：N5 範圍<br>
+    <b>Day 181–270</b>：N4 範圍<br>
+    <b>Day 271–300</b>：總複習 + 模擬考
+  </div>
+
+  <div class="about-card">
+    <h3>跟媽媽的約定</h3>
+    這個網站是媽媽花時間做的。<br><br>
+    <b>每天打卡。連續斷三天，網站關掉。</b><br><br>
+    300 天後去考 N4。考過考不過不是重點，重點是有沒有真的走完。
+  </div>
+
+  <div class="about-card">
+    <h3>如果今天真的不想學</h3>
+    沒關係，但是請打開來，按一下「我今天請假」。<br><br>
+    一個月最多 4 次。請假不算斷線，但也不算進度。<br><br>
+    <i style="color:var(--ink-3)">— 留給狀態真的很差的日子。</i>
+    <br><br>
+    <button class="danger-btn" onclick="useRestDay()">我今天請假（剩 <span id="restLeft">4</span> 次）</button>
+  </div>
+
+  <div class="about-card">
+    <h3>免費學習資源</h3>
+    需要更多練習可以用這些（不用全部，挑當下需要的）：<br><br>
+    <b>練習更多</b><br>
+    • <a href="https://realkana.com" target="_blank" style="color:var(--accent-2)">Real Kana</a> — 五十音打亂測驗<br>
+    • <a href="https://kana.pro" target="_blank" style="color:var(--accent-2)">Kana Pro</a> — 同類，速度可調<br><br>
+    <b>圖像聯想</b><br>
+    • <a href="https://www.tofugu.com/japanese/learn-hiragana/" target="_blank" style="color:var(--accent-2)">Tofugu Hiragana</a><br>
+    • <a href="https://www.tofugu.com/japanese/learn-katakana/" target="_blank" style="color:var(--accent-2)">Tofugu Katakana</a><br><br>
+    <b>查單字 / 漢字筆順</b><br>
+    • <a href="https://jisho.org" target="_blank" style="color:var(--accent-2)">Jisho.org</a><br><br>
+    <b>進階階段（Day 31 以後）</b><br>
+    • <a href="https://www3.nhk.or.jp/news/easy/" target="_blank" style="color:var(--accent-2)">NHK Easy News</a><br>
+    • <a href="https://jlptsensei.com" target="_blank" style="color:var(--accent-2)">JLPT Sensei</a><br>
+    • YouTube 搜：<i>Miku Real Japanese</i>、<i>日本語の森</i>、<i>早安日語</i>
+  </div>
+
+  <div class="about-card">
+    <h3>重置</h3>
+    如果一切都搞砸了，想從頭開始：
+    <button class="danger-btn" onclick="resetAll()">全部清空，重新開始</button>
+  </div>
+</div>
+
+<!-- ============ MOM VIEW (家長監督頁) ============ -->
+<div class="view" id="view-mom">
+  <header style="padding-top:8px">
+    <div class="logo">
+      <span class="num" style="font-size:22px">媽</span>
+      <span class="jp" style="font-size:18px">監督</span>
+    </div>
+    <button class="mom-back" onclick="switchView('today')">返回 ←</button>
+  </header>
+
+  <!-- 今日總覽 -->
+  <div class="mom-section">
+    <h3 class="mom-h">今天</h3>
+    <div class="mom-today-card" id="momToday"></div>
+  </div>
+
+  <!-- 關鍵數字 -->
+  <div class="mom-section">
+    <h3 class="mom-h">總體</h3>
+    <div class="mom-stat-grid">
+      <div class="mom-stat"><div class="v" id="mv-streak">0</div><div class="l">連續天數</div></div>
+      <div class="mom-stat"><div class="v" id="mv-done">0</div><div class="l">完成天數</div></div>
+      <div class="mom-stat"><div class="v" id="mv-kana">0</div><div class="l">會的假名</div></div>
+      <div class="mom-stat"><div class="v" id="mv-written">0</div><div class="l">寫過假名</div></div>
+    </div>
+  </div>
+
+  <!-- 30 天日曆 -->
+  <div class="mom-section">
+    <h3 class="mom-h">過去 30 天逐日</h3>
+    <p class="mom-hint">點任何一天看細節。空白 = 那天沒打開。</p>
+    <div class="day-cal" id="dayCal"></div>
+    <div class="mom-legend">
+      <span><i style="background:var(--good)"></i>三關全過</span>
+      <span><i style="background:var(--warn)"></i>有做但沒過</span>
+      <span><i style="background:var(--bg-3);border:1px solid var(--line)"></i>沒打開</span>
+    </div>
+  </div>
+
+  <!-- 詳細展開區 -->
+  <div class="mom-section" id="dayDetailWrap" style="display:none">
+    <h3 class="mom-h" id="dayDetailH">某日詳情</h3>
+    <div class="mom-detail-card" id="dayDetail"></div>
+  </div>
+
+  <p class="mom-foot">
+    💡 三天沒打開要關心一下她<br>
+    💡 某一關常常 ✗ 代表她在那關卡住了<br>
+    💡 連續沒打卡才需要介入，單天可以放過
+  </p>
+</div>
+
+</div><!-- /app -->
+
+<nav>
+  <button class="nav-btn active" data-view="today" onclick="switchView('today')">
+    <span class="ic">日</span><span>今天</span>
+  </button>
+  <button class="nav-btn" data-view="progress" onclick="switchView('progress')">
+    <span class="ic">記</span><span>進度</span>
+  </button>
+  <button class="nav-btn" data-view="about" onclick="switchView('about')">
+    <span class="ic">説</span><span>說明</span>
+  </button>
+</nav>
+
+<!-- ============ WRITE MODAL ============ -->
+<div class="write-modal" id="writeModal">
+  <div class="write-box">
+    <div class="write-head">
+      <div class="info">
+        <span class="ch" id="wCh">あ</span>
+        <span class="ro" id="wRo">a</span>
+      </div>
+      <button class="close" onclick="closeWrite()">×</button>
+    </div>
+    <div class="canvas-wrap" id="canvasWrap">
+      <svg id="writeSvg" viewBox="0 0 109 109" preserveAspectRatio="xMidYMid meet"></svg>
+    </div>
+    <div class="write-msg" id="writeMsg">照順序拖過數字點，描出筆畫</div>
+    <div class="write-stats">
+      <div class="item"><div class="v" id="wTimes">0</div><div class="l">今天寫過</div></div>
+      <div class="item"><div class="v" id="wTotal">0</div><div class="l">累計</div></div>
+      <div class="item"><div class="v" id="wOk">—</div><div class="l">筆順</div></div>
+    </div>
+    <div class="write-actions">
+      <button class="clear" onclick="clearWrite()">清掉重寫</button>
+      <button class="clear" onclick="replayWriteDemo()">👁 再看示範</button>
+      <button class="next" id="wNextBtn" onclick="speakAndNextWrite()">🔊 唸</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ LISTEN QUIZ MODAL ============ -->
+<div class="write-modal" id="listenQuizModal">
+  <div class="write-box" style="max-width:380px">
+    <div class="write-head">
+      <div class="info">
+        <span class="ch" style="font-size:18px">小考</span>
+        <span class="ro">聽聲音 → 選字</span>
+      </div>
+      <button class="close" onclick="ListenQuiz.close()">×</button>
+    </div>
+    <div id="lqBox"></div>
+  </div>
+</div>
+
+<div class="celebrate" id="celebrate"></div>
+
+<script src="data/lessons.js"></script>
+<script src="data/stroke-paths.js"></script>
+<script src="script.js"></script>
+</body>
+</html>
+
